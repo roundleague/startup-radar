@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { generateStartups } from './generator.js'
+import { fetchStartupsFromRSS } from './rss.js'
 import { readStartups, writeStartups } from './storage.js'
 
 const app = express()
@@ -20,15 +21,24 @@ app.get('/api/startups', (_req, res) => {
   }
 })
 
-// POST /api/ingest — generate 20 realistic startups and store them
-app.post('/api/ingest', (_req, res) => {
+// POST /api/ingest — scrape TechCrunch / VentureBeat funding articles via RSS
+app.post('/api/ingest', async (req, res) => {
   try {
-    const startups = generateStartups(20)
+    const { count } = req.body ?? {}
+    let startups
+
+    try {
+      startups = await fetchStartupsFromRSS(count ?? 20)
+    } catch (rssErr) {
+      console.warn('RSS fetch failed, falling back to generated data:', rssErr)
+      startups = generateStartups(count ?? 20)
+    }
+
     writeStartups(startups)
     res.json(startups)
   } catch (err) {
     console.error('Error ingesting startups:', err)
-    res.status(500).json({ error: 'Failed to ingest startups' })
+    res.status(500).json({ error: String(err instanceof Error ? err.message : err) })
   }
 })
 

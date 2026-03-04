@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.harmonic.ai)",
+      "WebFetch(domain:www.harmonic.ai)",
+      "WebFetch(domain:console.harmonic.ai)",
+      "WebFetch(domain:docs.datadistillr.com)",
+      "WebFetch(domain:lobehub.com)",
+      "WebFetch(domain:www.npmjs.com)"
+    ]
+  }
+}
