@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark mode as default — these are the only theme values */
+    --background: 240 10% 4%;
+    --foreground: 220 15% 92%;
+
+    --card: 240 8% 8%;
+    --card-foreground: 220 15% 92%;
+
+    --primary: 252 80% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 8% 12%;
+    --secondary-foreground: 220 15% 75%;
+
+    --muted: 240 8% 12%;
+    --muted-foreground: 220 15% 52%;
+
+    --accent: 240 8% 14%;
+    --accent-foreground: 220 15% 92%;
+
+    --border: 240 10% 15%;
+    --input: 240 8% 10%;
+    --ring: 252 80% 65%;
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Thin scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+@layer utilities {
+  /* Hot lead glow — applied on rows with score >= 71 */
+  .hot-row:hover {
+    box-shadow: inset 0 0 0 1px hsl(152 70% 50% / 0.2),
+                0 0 20px hsl(152 70% 50% / 0.08);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(252 80% 75%), hsl(220 90% 75%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Subtle header gradient */
+  .header-gradient {
+    background: linear-gradient(
+      180deg,
+      hsl(240 10% 6%) 0%,
+      hsl(240 10% 4%) 100%
+    );
+  }
+}
