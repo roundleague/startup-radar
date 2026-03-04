@@ -146,6 +146,22 @@ async function fetchNewsArticles(): Promise<NewsArticle[]> {
   )
 }
 
+// ── Domain lookup ─────────────────────────────────────────────────────────────
+
+async function lookupDomain(name: string, fallbackUrl: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(name)}`,
+      { signal: AbortSignal.timeout(3000) }
+    )
+    if (res.ok) {
+      const results = await res.json() as Array<{ name: string; domain: string }>
+      if (results.length > 0 && results[0].domain) return results[0].domain
+    }
+  } catch { /* timeout or network error — use fallback */ }
+  return fallbackUrl
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
@@ -153,10 +169,12 @@ export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
 
   if (!articles.length) throw new Error('No relevant articles from NewsAPI')
 
-  const startups: Startup[] = []
+  // First pass: extract all data (without domain)
+  type Interim = Omit<Startup, 'domain'> & { slug: string; articleUrl: string }
+  const interim: Interim[] = []
 
   for (const article of articles) {
-    if (startups.length >= count) break
+    if (interim.length >= count) break
 
     const name = extractCompanyName(article.title)
     if (!name) continue
@@ -170,15 +188,15 @@ export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
     const fundingDate = safeDate(article.publishedAt)
     const signals = deriveSignals(industry, stage, location, fundingDate, investors)
     const employeeCount = defaultEmployeeCount(stage)
-
     const description = (article.description ?? article.title).slice(0, 220).replace(/\s\S*$/, '') + '…'
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '')
     const { score } = scoreStartup({ funding_date: fundingDate, location, industry, employee_count: employeeCount, signals })
 
-    startups.push({
+    interim.push({
       id: crypto.randomUUID(),
       name,
-      domain: `${slug}.com`,
+      slug,
+      articleUrl: article.url,
       description,
       funding_stage: stage,
       funding_amount: amount,
@@ -196,6 +214,16 @@ export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
       ],
     })
   }
+
+  // Second pass: parallel Clearbit lookups, fallback to article URL
+  const domains = await Promise.all(
+    interim.map(s => lookupDomain(s.name, s.articleUrl))
+  )
+
+  const startups: Startup[] = interim.map((s, i) => {
+    const { slug: _slug, articleUrl: _articleUrl, ...rest } = s
+    return { ...rest, domain: domains[i] }
+  })
 
   return startups.sort((a, b) => b.lead_score - a.lead_score)
 }

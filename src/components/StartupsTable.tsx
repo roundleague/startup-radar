@@ -110,9 +110,14 @@ const columns: ColumnDef<Startup>[] = [
   {
     accessorKey: 'domain',
     header: () => <span className="text-xs uppercase tracking-wider text-muted-foreground">Domain</span>,
-    cell: ({ getValue }) => (
-      <span className="text-xs text-muted-foreground font-mono">{getValue() as string}</span>
-    ),
+    cell: ({ getValue }) => {
+      const domain = getValue() as string
+      return (
+        <span className="text-xs text-muted-foreground font-mono">
+          {domain.startsWith('http') ? 'Source Article' : domain}
+        </span>
+      )
+    },
   },
   {
     accessorKey: 'funding_stage',

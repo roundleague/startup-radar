@@ -54,12 +54,12 @@ export function DetailSheet({ startup }: DetailSheetProps) {
                   <div className="min-w-0">
                     <SheetTitle className="text-xl font-bold leading-tight">{startup.name}</SheetTitle>
                     <a
-                      href={`https://${startup.domain}`}
+                      href={startup.domain.startsWith('http') ? startup.domain : `https://${startup.domain}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors mt-0.5"
                     >
-                      {startup.domain}
+                      {startup.domain.startsWith('http') ? 'Source Article' : startup.domain}
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>
