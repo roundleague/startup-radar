@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { DateRangeFilter } from './lib/types'
 
+export interface DataSourceMeta {
+  source: 'newsapi' | 'mock' | 'database'
+  message: string
+  fetchedAt: string
+}
+
 interface StoreState {
   // Filters
   search: string
@@ -13,6 +19,7 @@ interface StoreState {
   // UI state
   selectedId: string | null
   isRefreshing: boolean
+  dataSource: DataSourceMeta | null
 
   // Actions
   setSearch: (v: string) => void
@@ -23,6 +30,7 @@ interface StoreState {
   setMinScore: (v: number) => void
   setSelectedId: (id: string | null) => void
   setIsRefreshing: (v: boolean) => void
+  setDataSource: (meta: DataSourceMeta) => void
   resetFilters: () => void
 }
 
@@ -39,6 +47,7 @@ export const useStore = create<StoreState>((set) => ({
   ...defaultFilters,
   selectedId: null,
   isRefreshing: false,
+  dataSource: null,
 
   setSearch: (search) => set({ search }),
   setFundingStage: (fundingStage) => set({ fundingStage }),
@@ -48,5 +57,6 @@ export const useStore = create<StoreState>((set) => ({
   setMinScore: (minScore) => set({ minScore }),
   setSelectedId: (selectedId) => set({ selectedId }),
   setIsRefreshing: (isRefreshing) => set({ isRefreshing }),
+  setDataSource: (dataSource) => set({ dataSource }),
   resetFilters: () => set(defaultFilters),
 }))

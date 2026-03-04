@@ -1,23 +1,37 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Startup } from "@/lib/types";
+import { useStore } from "@/store";
 
-async function fetchStartups(): Promise<Startup[]> {
+interface ApiResponse {
+  startups: Startup[];
+  source: "newsapi" | "mock" | "database";
+  message: string;
+  fetchedAt: string;
+}
+
+async function fetchStartups(): Promise<ApiResponse> {
   const res = await fetch("/api/startups");
   if (!res.ok) throw new Error("Failed to fetch startups");
   return res.json();
 }
 
-async function ingestStartups(): Promise<Startup[]> {
+async function ingestStartups(): Promise<ApiResponse> {
   const res = await fetch("/api/ingest", { method: "POST" });
   if (!res.ok) throw new Error("Failed to ingest startups");
   return res.json();
 }
 
 export function useStartups() {
+  const setDataSource = useStore((s) => s.setDataSource);
+
   return useQuery<Startup[]>({
     queryKey: ["startups"],
-    queryFn: fetchStartups,
+    queryFn: async () => {
+      const res = await fetchStartups();
+      setDataSource({ source: res.source, message: res.message, fetchedAt: res.fetchedAt });
+      return res.startups ?? [];
+    },
     staleTime: 1000 * 60 * 5,
     retry: 1,
   });
@@ -25,13 +39,15 @@ export function useStartups() {
 
 export function useIngest() {
   const queryClient = useQueryClient();
+  const setDataSource = useStore((s) => s.setDataSource);
 
   return useMutation({
     mutationFn: ingestStartups,
-    onSuccess: (data) => {
-      queryClient.setQueryData(["startups"], data);
-      const hotCount = data.filter((s) => s.lead_score >= 71).length;
-      toast.success(`${data.length} leads refreshed`, {
+    onSuccess: (res) => {
+      queryClient.setQueryData(["startups"], res.startups);
+      setDataSource({ source: res.source, message: res.message, fetchedAt: res.fetchedAt });
+      const hotCount = res.startups.filter((s) => s.lead_score >= 71).length;
+      toast.success(`${res.startups.length} leads refreshed`, {
         description: `${hotCount} hot lead${hotCount !== 1 ? "s" : ""} found. Sorted by lead score.`,
         duration: 4000,
       });

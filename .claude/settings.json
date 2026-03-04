@@ -3,7 +3,13 @@
     "allow": [
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(npm install dotenv)",
-      "Bash(\"x:/Web Projects/startup-radar/.env\":*)"
+      "Bash(\"x:/Web Projects/startup-radar/.env\":*)",
+      "WebFetch(domain:localhost)",
+      "Read(//c/Users/break/.claude/**)",
+      "Read(//c/Users/break/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\break\\.claude"
     ]
   }
 }

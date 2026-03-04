@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { subDays, parseISO } from 'date-fns'
-import { RefreshCw, Radio } from 'lucide-react'
+import { subDays, parseISO, formatDistanceToNow } from 'date-fns'
+import { RefreshCw, Radio, Database, Rss, FlaskConical } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -47,10 +47,31 @@ function useFilteredStartups(startups: Startup[]) {
   }, [startups, search, fundingStage, industry, dateRange, minScore])
 }
 
+const SOURCE_CONFIG = {
+  newsapi: {
+    icon: Rss,
+    label: 'Live feed',
+    className: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+    iconClass: 'text-emerald-400',
+  },
+  mock: {
+    icon: FlaskConical,
+    label: 'Mock data',
+    className: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+    iconClass: 'text-amber-400',
+  },
+  database: {
+    icon: Database,
+    label: 'Database',
+    className: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+    iconClass: 'text-blue-400',
+  },
+}
+
 export default function Dashboard() {
   const { data: startups = [], isLoading, isError } = useStartups()
   const ingest = useIngest()
-  const { selectedId } = useStore()
+  const { selectedId, dataSource } = useStore()
 
   const filteredStartups = useFilteredStartups(startups)
   const selectedStartup = startups.find(s => s.id === selectedId) ?? null
@@ -96,6 +117,22 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      {/* Debug banner */}
+      {dataSource && (() => {
+        const cfg = SOURCE_CONFIG[dataSource.source] ?? SOURCE_CONFIG.mock
+        const Icon = cfg.icon
+        return (
+          <div className={`border-b px-6 py-2 flex items-center gap-2 text-xs font-mono ${cfg.className}`}>
+            <Icon className={`h-3.5 w-3.5 shrink-0 ${cfg.iconClass}`} />
+            <span className="font-semibold">{cfg.label}</span>
+            <span className="opacity-70">·</span>
+            <span className="opacity-80">{dataSource.message}</span>
+            <span className="opacity-70">·</span>
+            <span className="opacity-60">{dataSource.fetchedAt ? formatDistanceToNow(new Date(dataSource.fetchedAt), { addSuffix: true }) : 'just now'}</span>
+          </div>
+        )
+      })()}
 
       {/* Main content */}
       <main className="mx-auto max-w-[1600px] px-6 py-6">

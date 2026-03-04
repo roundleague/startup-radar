@@ -4,60 +4,9 @@ import type { Startup } from './generator.js'
 
 type FundingStage = 'Pre-Seed' | 'Seed' | 'Series A' | 'Series B' | 'Series C+'
 
-// ── RSS feeds ─────────────────────────────────────────────────────────────────
+const NEWS_API_KEY = process.env.NEWS_API_KEY
 
-const FEEDS = [
-  { url: 'https://techcrunch.com/category/startups/feed/', source: 'TechCrunch' },
-  { url: 'https://venturebeat.com/category/business/feed/', source: 'VentureBeat' },
-]
-
-// Only articles whose title contains funding signals
 const FUNDING_TITLE_RE = /\b(raises?|raised|secures?|secured|lands?|landed|close[sd]?|nabs?|bags?|scores?|funding|investment|seed round|series [a-f])\b/i
-
-// ── XML helpers ───────────────────────────────────────────────────────────────
-
-function extractTag(xml: string, tag: string): string {
-  // Handle both plain and CDATA content
-  const re = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i')
-  const m = xml.match(re)
-  return m ? m[1].trim() : ''
-}
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s{2,}/g, ' ').trim()
-}
-
-interface RSSItem {
-  title: string
-  description: string
-  pubDate: string
-  link: string
-  source: string
-}
-
-async function fetchFeed(url: string, source: string): Promise<RSSItem[]> {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StartupRadar/1.0)' },
-    signal: AbortSignal.timeout(8000),
-  })
-  if (!res.ok) throw new Error(`Feed fetch failed (${res.status}): ${url}`)
-  const xml = await res.text()
-
-  const items: RSSItem[] = []
-  const itemRe = /<item>([\s\S]*?)<\/item>/g
-  let m: RegExpExecArray | null
-  while ((m = itemRe.exec(xml)) !== null) {
-    const block = m[1]
-    const title = stripHtml(extractTag(block, 'title'))
-    const description = stripHtml(extractTag(block, 'description') || extractTag(block, 'content:encoded'))
-    const pubDate = extractTag(block, 'pubDate')
-    const link = extractTag(block, 'link') || extractTag(block, 'guid')
-    if (title && FUNDING_TITLE_RE.test(title)) {
-      items.push({ title, description, pubDate, link, source })
-    }
-  }
-  return items
-}
 
 // ── Extraction helpers ────────────────────────────────────────────────────────
 
@@ -66,7 +15,6 @@ function extractCompanyName(title: string): string | null {
   const m = title.match(new RegExp(`^(.+?)\\s+(?:${verbPat})\\b`, 'i'))
   if (!m) return null
   let name = m[1].trim()
-  // Strip geographic / descriptor prefixes
   name = name.replace(/^(?:YC[-\s]backed|Y\.?C\.?[-\s]backed|Former|New|AI|B2B|SaaS|Fintech)\s+/i, '')
   name = name.replace(/^\w+-(?:based|led|backed|founded)\s+/i, '')
   name = name.replace(/^(?:startup|company|firm|platform|app)\s+/i, '')
@@ -92,7 +40,6 @@ function extractStage(text: string, amount: number): FundingStage {
   if (/series a/.test(lower)) return 'Series A'
   if (/\bseed\b/.test(lower)) return 'Seed'
   if (/growth.?round|late.?stage/.test(lower)) return 'Series C+'
-  // Infer from amount
   if (amount > 0 && amount < 1_500_000) return 'Pre-Seed'
   if (amount >= 1_500_000 && amount < 7_000_000) return 'Seed'
   if (amount >= 7_000_000 && amount < 30_000_000) return 'Series A'
@@ -102,34 +49,21 @@ function extractStage(text: string, amount: number): FundingStage {
 }
 
 function extractInvestors(text: string): string[] {
-  const patterns = [
-    /led by ([^,\.]+(?:,\s*[^,\.]+)*?)(?:\s+and\s+[^,\.]+)?[,\.]?\s+(?:with|to|for|in)/i,
-    /led by ([^,\.\n]+)/i,
-    /(?:from|by) ([^,\.\n]+(?:Ventures?|Capital|Partners?|Fund|Investments?|Equity))/gi,
-    /(?:Sequoia|a16z|Andreessen Horowitz|Y Combinator|Accel|Benchmark|Founders Fund|Lightspeed|General Catalyst|Tiger Global|Coatue|GV|Google Ventures|First Round|Bessemer|Greylock|Khosla|Index Ventures)/gi,
-  ]
-
   const found = new Set<string>()
-
-  // Named VCs in the text
   const namedVCRe = /(?:Sequoia|Andreessen Horowitz|a16z|Y Combinator|Accel|Benchmark|Founders Fund|Lightspeed|General Catalyst|Tiger Global|Coatue|GV|Google Ventures|First Round Capital|Bessemer|Greylock|Khosla Ventures|Index Ventures|Insight Partners|IVP|NEA|Battery Ventures|Redpoint|Spark Capital)/g
   let m: RegExpExecArray | null
   while ((m = namedVCRe.exec(text)) !== null) found.add(m[0])
-
-  // "led by X" pattern
   const ledByM = text.match(/led by ([^,\.\n]{3,50})/i)
   if (ledByM) {
     const raw = ledByM[1].trim().replace(/\s+(and|with)\s+.*/i, '')
     if (raw.length >= 3) found.add(raw)
   }
-
   return [...found].slice(0, 3)
 }
 
 function extractLocation(text: string): string {
   const usPattern = /\b(?:San Francisco|New York|Austin|Seattle|Boston|Los Angeles|Chicago|Denver|Miami|Atlanta|Cambridge|Palo Alto|Mountain View|Menlo Park|Brooklyn),?\s*(?:CA|NY|TX|WA|MA|IL|CO|FL|GA)?\s*(?:,\s*USA?|,\s*United States)?\b/i
   const intlPattern = /\b(?:London|Berlin|Toronto|Paris|Amsterdam|Singapore|Tel Aviv|Sydney|Dublin)\b/i
-
   const usM = text.match(usPattern)
   if (usM) {
     const city = usM[0].trim()
@@ -155,11 +89,7 @@ function inferIndustry(text: string): string {
 
 function defaultEmployeeCount(stage: FundingStage): number {
   const map: Record<FundingStage, number> = {
-    'Pre-Seed': 6,
-    'Seed': 18,
-    'Series A': 45,
-    'Series B': 120,
-    'Series C+': 280,
+    'Pre-Seed': 6, 'Seed': 18, 'Series A': 45, 'Series B': 120, 'Series C+': 280,
   }
   return map[stage]
 }
@@ -180,57 +110,68 @@ function deriveSignals(industry: string, stage: FundingStage, location: string, 
   if (lower === 'crypto') signals.push('crypto')
   if (/usa|united states/i.test(location)) signals.push('us_based')
   if (investors.some(i => /y combinator|yc/i.test(i))) signals.push('accelerator')
-
   try {
     const d = new Date(fundingDate)
-    const msSince = Date.now() - d.getTime()
-    if (msSince < 30 * 24 * 60 * 60 * 1000) signals.push('recent_funding')
+    if (Date.now() - d.getTime() < 30 * 24 * 60 * 60 * 1000) signals.push('recent_funding')
   } catch { /* ignore */ }
-
   return [...new Set(signals)]
+}
+
+// ── NewsAPI fetch ─────────────────────────────────────────────────────────────
+
+interface NewsArticle {
+  title: string
+  description: string | null
+  url: string
+  publishedAt: string
+  source: { name: string }
+}
+
+async function fetchNewsArticles(): Promise<NewsArticle[]> {
+  if (!NEWS_API_KEY) throw new Error('NEWS_API_KEY is not set')
+
+  const query = 'startup raises funding "series a" OR "series b" OR "seed round" OR "raised"'
+  const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=100&apiKey=${NEWS_API_KEY}`
+
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
+  if (!res.ok) throw new Error(`NewsAPI request failed (${res.status})`)
+
+  const json = await res.json() as { status: string; articles: NewsArticle[]; message?: string }
+  if (json.status !== 'ok') throw new Error(`NewsAPI error: ${json.message ?? json.status}`)
+
+  return json.articles.filter(a =>
+    a.title &&
+    a.title !== '[Removed]' &&
+    FUNDING_TITLE_RE.test(a.title)
+  )
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
-  const allItems: RSSItem[] = []
+  const articles = await fetchNewsArticles()
 
-  await Promise.allSettled(
-    FEEDS.map(f => fetchFeed(f.url, f.source).then(items => allItems.push(...items)))
-  )
-
-  if (!allItems.length) throw new Error('No articles fetched from RSS feeds')
-
-  // Deduplicate by title similarity
-  const seen = new Set<string>()
-  const unique = allItems.filter(item => {
-    const key = item.title.toLowerCase().slice(0, 60)
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  if (!articles.length) throw new Error('No relevant articles from NewsAPI')
 
   const startups: Startup[] = []
 
-  for (const item of unique) {
+  for (const article of articles) {
     if (startups.length >= count) break
 
-    const name = extractCompanyName(item.title)
+    const name = extractCompanyName(article.title)
     if (!name) continue
 
-    const fullText = `${item.title} ${item.description}`
+    const fullText = `${article.title} ${article.description ?? ''}`
     const amount = extractAmount(fullText)
     const stage = extractStage(fullText, amount)
     const investors = extractInvestors(fullText)
     const location = extractLocation(fullText)
     const industry = inferIndustry(fullText)
-    const fundingDate = safeDate(item.pubDate)
+    const fundingDate = safeDate(article.publishedAt)
     const signals = deriveSignals(industry, stage, location, fundingDate, investors)
     const employeeCount = defaultEmployeeCount(stage)
 
-    // Short description: first 200 chars of the article summary
-    const description = item.description.slice(0, 220).replace(/\s\S*$/, '') + '…'
-
+    const description = (article.description ?? article.title).slice(0, 220).replace(/\s\S*$/, '') + '…'
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '')
     const { score } = scoreStartup({ funding_date: fundingDate, location, industry, employee_count: employeeCount, signals })
 
@@ -249,7 +190,7 @@ export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
       lead_score: score,
       signals,
       source_links: [
-        { label: item.source, url: item.link },
+        { label: article.source.name, url: article.url },
         { label: 'Crunchbase', url: `https://crunchbase.com/organization/${slug}` },
         { label: 'LinkedIn', url: `https://linkedin.com/company/${slug}` },
       ],
