@@ -1,6 +1,6 @@
-import { writeFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
 import { generateStartups } from "../server/generator.js";
-import { fetchStartupsFromRSS } from "../server/rss.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
@@ -8,26 +8,16 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    let startups;
+    // Serve the bundled curated dataset for consistent results
+    const bundledPath = join(process.cwd(), "server", "data", "startups.json");
 
-    try {
-      startups = await fetchStartupsFromRSS(20);
-    } catch (rssErr) {
-      console.warn("RSS fetch failed, falling back to generated data:", rssErr);
-      startups = generateStartups(20);
+    if (existsSync(bundledPath)) {
+      const data = JSON.parse(readFileSync(bundledPath, "utf-8"));
+      return res.json(data);
     }
 
-    // Persist to /tmp so GET /api/startups can read it within the same lambda instance
-    try {
-      writeFileSync(
-        "/tmp/startups.json",
-        JSON.stringify(startups, null, 2),
-        "utf-8",
-      );
-    } catch {
-      /* non-critical */
-    }
-
+    // Fallback: generate a fresh batch if bundled file is missing
+    const startups = generateStartups(20);
     return res.json(startups);
   } catch (err) {
     console.error("Error ingesting startups:", err);

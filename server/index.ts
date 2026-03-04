@@ -1,59 +1,57 @@
-import express from 'express'
-import cors from 'cors'
-import { generateStartups } from './generator.js'
-import { fetchStartupsFromRSS } from './rss.js'
-import { readStartups, writeStartups } from './storage.js'
+import express from "express";
+import cors from "cors";
+import { readStartups } from "./storage.js";
 
-const app = express()
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001
+const app = express();
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
-app.use(cors())
-app.use(express.json())
+app.use(cors());
+app.use(express.json());
 
 // GET /api/startups — return all stored startups
-app.get('/api/startups', (_req, res) => {
+app.get("/api/startups", (_req, res) => {
   try {
-    const startups = readStartups()
-    res.json(startups)
+    const startups = readStartups();
+    res.json(startups);
   } catch (err) {
-    console.error('Error reading startups:', err)
-    res.status(500).json({ error: 'Failed to read startups' })
+    console.error("Error reading startups:", err);
+    res.status(500).json({ error: "Failed to read startups" });
   }
-})
+});
 
-// POST /api/ingest — scrape TechCrunch / VentureBeat funding articles via RSS
-app.post('/api/ingest', async (req, res) => {
+// POST /api/ingest — return the curated startup dataset
+app.post("/api/ingest", (_req, res) => {
   try {
-    const { count } = req.body ?? {}
-    let startups
-
-    try {
-      startups = await fetchStartupsFromRSS(count ?? 20)
-    } catch (rssErr) {
-      console.warn('RSS fetch failed, falling back to generated data:', rssErr)
-      startups = generateStartups(count ?? 20)
-    }
-
-    writeStartups(startups)
-    res.json(startups)
+    const startups = readStartups();
+    res.json(startups);
   } catch (err) {
-    console.error('Error ingesting startups:', err)
-    res.status(500).json({ error: String(err instanceof Error ? err.message : err) })
+    console.error("Error ingesting startups:", err);
+    res
+      .status(500)
+      .json({ error: String(err instanceof Error ? err.message : err) });
   }
-})
+});
 
 // GET /api/export.csv — return CSV of current startups
-app.get('/api/export.csv', (_req, res) => {
+app.get("/api/export.csv", (_req, res) => {
   try {
-    const startups = readStartups()
+    const startups = readStartups();
 
     const headers = [
-      'Company', 'Domain', 'Industry', 'Stage', 'Amount (USD)',
-      'Funding Date', 'Location', 'Employees', 'Lead Score',
-      'Investors', 'Signals',
-    ]
+      "Company",
+      "Domain",
+      "Industry",
+      "Stage",
+      "Amount (USD)",
+      "Funding Date",
+      "Location",
+      "Employees",
+      "Lead Score",
+      "Investors",
+      "Signals",
+    ];
 
-    const rows = startups.map(s => [
+    const rows = startups.map((s) => [
       s.name,
       s.domain,
       s.industry,
@@ -63,24 +61,27 @@ app.get('/api/export.csv', (_req, res) => {
       s.location,
       s.employee_count,
       s.lead_score,
-      s.investors.join('; '),
-      s.signals.join('; '),
-    ])
+      s.investors.join("; "),
+      s.signals.join("; "),
+    ]);
 
-    const escape = (val: unknown) => `"${String(val).replace(/"/g, '""')}"`
+    const escape = (val: unknown) => `"${String(val).replace(/"/g, '""')}"`;
     const csv = [headers, ...rows]
-      .map(row => row.map(escape).join(','))
-      .join('\n')
+      .map((row) => row.map(escape).join(","))
+      .join("\n");
 
-    res.setHeader('Content-Type', 'text/csv')
-    res.setHeader('Content-Disposition', 'attachment; filename="startup-radar.csv"')
-    res.send(csv)
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="startup-radar.csv"',
+    );
+    res.send(csv);
   } catch (err) {
-    console.error('Error exporting CSV:', err)
-    res.status(500).json({ error: 'Failed to export CSV' })
+    console.error("Error exporting CSV:", err);
+    res.status(500).json({ error: "Failed to export CSV" });
   }
-})
+});
 
 app.listen(PORT, () => {
-  console.log(`🚀 Startup Radar API running on http://localhost:${PORT}`)
-})
+  console.log(`🚀 Startup Radar API running on http://localhost:${PORT}`);
+});
