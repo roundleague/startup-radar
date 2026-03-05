@@ -117,7 +117,7 @@ function deriveSignals(industry: string, stage: FundingStage, location: string, 
   return [...new Set(signals)]
 }
 
-// ── NewsAPI fetch ─────────────────────────────────────────────────────────────
+// ── Article fetchers ──────────────────────────────────────────────────────────
 
 interface NewsArticle {
   title: string
@@ -127,12 +127,49 @@ interface NewsArticle {
   source: { name: string }
 }
 
-async function fetchNewsArticles(): Promise<NewsArticle[]> {
+const FUNDING_QUERY = 'startup raises funding "series a" OR "series b" OR "seed round" OR "raised"'
+
+function extractCDATA(xml: string, tag: string): string | null {
+  const m = xml.match(new RegExp(`<${tag}>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([^<]*))<\\/${tag}>`))
+  return m ? (m[1] ?? m[2] ?? null) : null
+}
+
+async function fetchGoogleNewsArticles(): Promise<NewsArticle[]> {
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(FUNDING_QUERY)}&hl=en-US&gl=US&ceid=US:en`
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
+  if (!res.ok) throw new Error(`Google News RSS failed (${res.status})`)
+
+  const xml = await res.text()
+  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)]
+
+  return items.map(([, item]) => {
+    const rawTitle = extractCDATA(item, 'title') ?? ''
+    const title = rawTitle.replace(/\s+-\s+[^-]+$/, '').trim()
+
+    // Description HTML contains the real article link
+    const descHtml = extractCDATA(item, 'description') ?? ''
+    const articleUrl = descHtml.match(/href="(https?:\/\/(?!news\.google)[^"]+)"/)?.[1]
+      ?? item.match(/<link>(.*?)<\/link>/s)?.[1]?.trim()
+      ?? ''
+
+    const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/s)?.[1]?.trim() ?? ''
+    const sourceName = item.match(/<source[^>]*>(.*?)<\/source>/s)?.[1]?.trim() ?? 'Google News'
+    const description = descHtml.replace(/<[^>]+>/g, '').trim() || null
+
+    return {
+      title,
+      description,
+      url: articleUrl,
+      publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+      source: { name: sourceName },
+    }
+  }).filter(a => a.title && a.url && FUNDING_TITLE_RE.test(a.title))
+}
+
+async function fetchNewsAPIArticles(): Promise<NewsArticle[]> {
   if (!NEWS_API_KEY) throw new Error('NEWS_API_KEY is not set')
 
-  const query = 'startup raises funding "series a" OR "series b" OR "seed round" OR "raised"'
-  const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=100&apiKey=${NEWS_API_KEY}`
-
+  const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(FUNDING_QUERY)}&language=en&sortBy=publishedAt&pageSize=100&apiKey=${NEWS_API_KEY}`
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`NewsAPI request failed (${res.status})`)
 
@@ -164,10 +201,21 @@ async function lookupDomain(name: string, fallbackUrl: string): Promise<string> 
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
-  const articles = await fetchNewsArticles()
+export async function fetchStartupsFromRSS(count = 20): Promise<{ startups: Startup[], feedSource: string }> {
+  let articles: NewsArticle[]
+  let feedSource: string
 
-  if (!articles.length) throw new Error('No relevant articles from NewsAPI')
+  try {
+    articles = await fetchGoogleNewsArticles()
+    if (!articles.length) throw new Error('No articles from Google News')
+    feedSource = 'Google News'
+  } catch (googleErr) {
+    const reason = googleErr instanceof Error ? googleErr.message : String(googleErr)
+    console.warn('Google News failed, falling back to NewsAPI:', reason)
+    articles = await fetchNewsAPIArticles()
+    if (!articles.length) throw new Error('No relevant articles from NewsAPI')
+    feedSource = 'NewsAPI'
+  }
 
   // First pass: extract all data (without domain)
   type Interim = Omit<Startup, 'domain'> & { slug: string; articleUrl: string }
@@ -225,5 +273,5 @@ export async function fetchStartupsFromRSS(count = 20): Promise<Startup[]> {
     return { ...rest, domain: domains[i] }
   })
 
-  return startups.sort((a, b) => b.lead_score - a.lead_score)
+  return { startups: startups.sort((a, b) => b.lead_score - a.lead_score), feedSource }
 }

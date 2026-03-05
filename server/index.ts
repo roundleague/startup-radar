@@ -41,9 +41,10 @@ app.post("/api/ingest", async (_req, res) => {
     let sourceMessage: string;
 
     try {
-      startups = await fetchStartupsFromRSS(20);
+      const result = await fetchStartupsFromRSS(20);
+      startups = result.startups;
       source = "newsapi";
-      sourceMessage = `Live feed via NewsAPI — ${startups.length} articles parsed`;
+      sourceMessage = `Live feed via ${result.feedSource} — ${startups.length} articles parsed`;
     } catch (rssErr) {
       const reason = rssErr instanceof Error ? rssErr.message : String(rssErr);
       console.warn("NewsAPI fetch failed, falling back to generated data:", reason);
