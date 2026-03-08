@@ -5,6 +5,14 @@ type FundingStage = 'Pre-Seed' | 'Seed' | 'Series A' | 'Series B' | 'Series C+'
 
 interface SourceLink { label: string; url: string }
 
+export interface Contact {
+  name: string
+  title: string | null
+  email: string | null
+  phone: string | null
+  linkedin_url: string | null
+}
+
 export interface Startup {
   id: string
   name: string
@@ -20,6 +28,7 @@ export interface Startup {
   lead_score: number
   signals: string[]
   source_links: SourceLink[]
+  contact: Contact | null
 }
 
 const PREFIXES = [
@@ -237,6 +246,7 @@ export function generateStartups(count = 20): Startup[] {
       lead_score: score,
       signals: uniqueSignals,
       source_links: sourceLinks,
+      contact: null,
     })
   }
 
