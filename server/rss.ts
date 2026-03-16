@@ -260,6 +260,7 @@ export async function fetchStartupsFromRSS(count = 20): Promise<{ startups: Star
         { label: 'Crunchbase', url: `https://crunchbase.com/organization/${slug}` },
         { label: 'LinkedIn', url: `https://linkedin.com/company/${slug}` },
       ],
+      contact: null,
     })
   }
 
