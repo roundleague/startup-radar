@@ -7,3 +7,4 @@ dist-ssr
 !.env.example
 server/data/startups.json
 .claude
+MVP.md
